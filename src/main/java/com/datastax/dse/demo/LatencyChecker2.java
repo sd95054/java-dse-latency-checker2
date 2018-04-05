@@ -106,7 +106,8 @@ public class LatencyChecker2 {
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc1_name)
                                 .build()
-                ).build();
+                ).withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM))
+                .build();
 
 
         System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
@@ -121,7 +122,8 @@ public class LatencyChecker2 {
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc2_name)
                                 .build()
-                ).build();
+                ).withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM))
+                .build();
 
 
         System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
