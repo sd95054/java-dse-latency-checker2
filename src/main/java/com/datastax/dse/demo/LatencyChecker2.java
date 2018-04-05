@@ -4,7 +4,6 @@ import com.datastax.driver.core.*;
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
 import com.datastax.driver.core.utils.UUIDs;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -47,6 +46,10 @@ public class LatencyChecker2 {
     private Cluster cluster2;
     private Session session2;
     private UUID[] uuidArray;
+    private String keyspace;
+    private String createTable;
+    private String insertStatement;
+    private String selectStatement;
 
     private void loadProperties() {
         Properties prop = new Properties();
@@ -72,6 +75,10 @@ public class LatencyChecker2 {
             dc2_name = prop.getProperty("dc2_name");
             numRecords = Integer.parseInt(prop.getProperty("numRecords"));
             uuidArray = new UUID[numRecords];
+            keyspace = prop.getProperty("keyspace");
+            createTable = prop.getProperty("createTable");
+            insertStatement = prop.getProperty("insertStatement");
+            selectStatement = prop.getProperty("selectStatement");
 
         }
         catch (IOException ex) {
@@ -138,14 +145,9 @@ public class LatencyChecker2 {
     private void createSchema() {
 
         //NOTE: The schema should use NetworkTopologyStrategy and RF=3 for Production testing
-        session1.execute("CREATE KEYSPACE IF NOT EXISTS latency_check WITH replication " +
-                "= {'class':'SimpleStrategy', 'replication_factor':1};");
+        session1.execute(keyspace);
 
-        session1.execute(
-                "CREATE TABLE IF NOT EXISTS latency_check.kvp (" +
-                        "id uuid PRIMARY KEY," +
-                        "nanosec bigint" +
-                        ");");
+        session1.execute(createTable);
     }
 
     /**
@@ -166,7 +168,7 @@ public class LatencyChecker2 {
 
     private void loadData() {
 
-        PreparedStatement preparedStatement = session1.prepare("insert into latency_check.kvp (id, nanosec) values (?, ?) USING TTL 3600");
+        PreparedStatement preparedStatement = session1.prepare(insertStatement);
 
         for (int i=0; i<numRecords; i++) {
 
@@ -213,7 +215,7 @@ public class LatencyChecker2 {
 
         long retval=0;
 
-        PreparedStatement preparedStatement = session2.prepare("select nanosec from latency_check.kvp where id=?");
+        PreparedStatement preparedStatement = session2.prepare(selectStatement);
 
         try {
             BoundStatement boundStatement = preparedStatement.bind(uuid);
