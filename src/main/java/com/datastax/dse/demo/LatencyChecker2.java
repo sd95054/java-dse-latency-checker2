@@ -4,6 +4,7 @@ import com.datastax.driver.core.*;
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
 import com.datastax.driver.core.utils.UUIDs;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
@@ -25,41 +26,38 @@ public class LatencyChecker2 {
     //Number of records to write (and then read)
     private static int numRecords;
 
-    public static void main(String[] args){
-
-        LatencyChecker2 client = new LatencyChecker2();
-
-        try {
-            client.loadProperties();
-            client.connect(CONTACT_POINTS_DC1, CONTACT_POINTS_DC2, PORT);
-            client.createSchema();
-            client.loadData();
-            client.computeDelta();
-
-        } finally {
-            client.close();
-        }
-    }
-
     private Cluster cluster1;
     private Session session1;
     private Cluster cluster2;
     private Session session2;
-    private UUID[] uuidArray;
     private String keyspace;
     private String createTable;
     private String insertStatement;
     private String selectStatement;
+    private PreparedStatement preparedStatement_loadData;
+    private PreparedStatement preparedStatement_readData;
 
-    private void loadProperties() {
+    public void loadProperties() {
         Properties prop = new Properties();
         InputStream input = null;
 
         try {
-            input = LatencyChecker2.class.getResourceAsStream("/application.properties");
+            //Check if a Property File is passed in command line
+            String propFile = System.getProperty("PROP_FILE");
 
-            // load a properties file
-            prop.load(input);
+            System.out.println("Property File Specified: " + propFile);
+
+            if (propFile != null) {
+                prop.load(new FileInputStream(propFile));
+            }
+            else {
+                //Else load from default maven project location
+                System.out.println("Trying to use default bundled property file...");
+                input = LatencyChecker2.class.getResourceAsStream("/application.properties");
+
+                // load a properties file
+                prop.load(input);
+            }
 
             // get the property values
             String str = prop.getProperty("CONTACT_POINTS_DC1");
@@ -74,7 +72,6 @@ public class LatencyChecker2 {
             dc1_name = prop.getProperty("dc1_name");
             dc2_name = prop.getProperty("dc2_name");
             numRecords = Integer.parseInt(prop.getProperty("numRecords"));
-            uuidArray = new UUID[numRecords];
             keyspace = prop.getProperty("keyspace");
             createTable = prop.getProperty("createTable");
             insertStatement = prop.getProperty("insertStatement");
@@ -98,17 +95,13 @@ public class LatencyChecker2 {
     /**
      * Initiates a connection to the cluster
      * specified by the given contact point.
-     *
-     * @param contactPoints_DC1 the contact points to use for DC1
-     * @param contactPoints_DC2 the contact points to use for DC2
-     * @param port          the port to use.
      */
-    private void connect(String[] contactPoints_DC1, String[] contactPoints_DC2, int port) {
+    public void connect() {
 
         //For DC #1
 
         cluster1 = Cluster.builder()
-                .addContactPoints(contactPoints_DC1).withPort(port)
+                .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
                 .withLoadBalancingPolicy(
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc1_name)
@@ -124,7 +117,7 @@ public class LatencyChecker2 {
         //For DC #2 (create session2 for reading)
 
         cluster2 = Cluster.builder()
-                .addContactPoints(contactPoints_DC2).withPort(port)
+                .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
                 .withLoadBalancingPolicy(
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc2_name)
@@ -138,11 +131,16 @@ public class LatencyChecker2 {
         session2 = cluster2.connect();
     }
 
+    public void createPreparedStatements() {
+        preparedStatement_loadData = session1.prepare(insertStatement);
+        preparedStatement_readData = session2.prepare(selectStatement);
+    }
+
     /**
      * Creates the schema (keyspace) and tables
      * for this example.
      */
-    private void createSchema() {
+    public void createSchema() {
 
         //NOTE: The schema should use NetworkTopologyStrategy and RF=3 for Production testing
         session1.execute(keyspace);
@@ -166,9 +164,11 @@ public class LatencyChecker2 {
      * arbitrarily large
      */
 
-    private void loadData() {
+    public UUID[] loadData() {
 
-        PreparedStatement preparedStatement = session1.prepare(insertStatement);
+        long startTime=0, endTime=0;
+        double avgWriteLatency=0;
+        UUID[] uuidArray = new UUID[numRecords];
 
         for (int i=0; i<numRecords; i++) {
 
@@ -176,9 +176,17 @@ public class LatencyChecker2 {
                 UUID uuid = UUIDs.random();
                 uuidArray[i] = uuid;
 
-                BoundStatement boundStatement = preparedStatement.bind(uuid, getCurrentTime());
+                startTime = getCurrentTime();
+
+                BoundStatement boundStatement = preparedStatement_loadData.bind(uuid, startTime);
 
                 ResultSet rs = session1.execute(boundStatement);
+
+                endTime = getCurrentTime();
+
+                avgWriteLatency = avgWriteLatency + (endTime - startTime)/1000000.0;
+
+                //System.out.println("Delta Writes (msec) " + (endTime - startTime)/1000000.0);
 
                 //System.out.println(rs);
 
@@ -191,34 +199,44 @@ public class LatencyChecker2 {
             }
         }
 
-
+        System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
+        return uuidArray;
     }
 
-    private void computeDelta() {
+    public void computeDelta(UUID[] uuidArray) {
 
-        double avgLatency=0;
+        long startTime=0, endTime=0;
+        double avgReadLatency=0;
+
+        double avgTotalLatency=0;
 
         for (int i=0; i<numRecords; i++) {
+
+            startTime = getCurrentTime();
+
             long writeTime = getCreationTime(uuidArray[i]);
-            long now = getCurrentTime();
-            long delta = now - writeTime;
-            avgLatency += delta;
-            //System.out.println("Delta: " + delta);
+
+            //For Read Latency
+            endTime = getCurrentTime();
+            avgReadLatency = avgReadLatency + (endTime - startTime)/1000000.0;
+            //System.out.println("Delta Reads (msec) " + (endTime - startTime)/1000000.0);
+
+            //For Write + Replication + Read delays
+            long currentTime = getCurrentTime();
+            avgTotalLatency = avgTotalLatency + (currentTime-writeTime)/1000000.0;
+            //System.out.println("Delta Total (msec) " + (currentTime-writeTime)/1000000.0);
         }
 
-        avgLatency = avgLatency/numRecords;
-        System.out.println("----\nAverage latency (msec): " + avgLatency/1000000.0);
-
+        System.out.println("Average Read latency (msec): " + avgReadLatency/numRecords);
+        System.out.println("Average Total latency (msec): " + avgTotalLatency/numRecords);
     }
 
     private long getCreationTime(UUID uuid) {
 
         long retval=0;
 
-        PreparedStatement preparedStatement = session2.prepare(selectStatement);
-
         try {
-            BoundStatement boundStatement = preparedStatement.bind(uuid);
+            BoundStatement boundStatement = preparedStatement_readData.bind(uuid);
             ResultSet results = session2.execute(boundStatement);
             for (Row row : results) {
                 retval = row.getLong("nanosec");
@@ -234,7 +252,7 @@ public class LatencyChecker2 {
     /**
      * Closes the session and the cluster.
      */
-    private void close() {
+    public void close() {
         session1.close();
         cluster1.close();
         session2.close();
