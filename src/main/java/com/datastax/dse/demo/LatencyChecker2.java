@@ -7,6 +7,7 @@ import com.datastax.driver.core.utils.UUIDs;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Iterator;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -16,12 +17,16 @@ public class LatencyChecker2 {
     private  static String[] CONTACT_POINTS_DC1;
     private  static String[] CONTACT_POINTS_DC2;
     private  static int PORT;
+    private static ConsistencyLevel CONSISTENCY;
 
     // DC #1 configs
     private  String dc1_name;
 
     //DC #2 configs
     private  String dc2_name;
+
+    //Parallel Threads/Tasks
+    public int numTasks;
 
     //Number of records to write (and then read)
     private static int numRecords;
@@ -69,8 +74,10 @@ public class LatencyChecker2 {
             CONTACT_POINTS_DC2  = str.split(",");
 
             PORT = Integer.parseInt(prop.getProperty("PORT"));
+            CONSISTENCY = ConsistencyLevel.valueOf(prop.getProperty("CONSISTENCY"));
             dc1_name = prop.getProperty("dc1_name");
             dc2_name = prop.getProperty("dc2_name");
+            numTasks = Integer.parseInt(prop.getProperty("numTasks"));
             numRecords = Integer.parseInt(prop.getProperty("numRecords"));
             keyspace = prop.getProperty("keyspace");
             createTable = prop.getProperty("createTable");
@@ -106,7 +113,7 @@ public class LatencyChecker2 {
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc1_name)
                                 .build()
-                ).withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM))
+                ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
                 .build();
 
 
@@ -122,7 +129,7 @@ public class LatencyChecker2 {
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc2_name)
                                 .build()
-                ).withQueryOptions(new QueryOptions().setConsistencyLevel(ConsistencyLevel.LOCAL_QUORUM))
+                ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
                 .build();
 
 
@@ -159,16 +166,35 @@ public class LatencyChecker2 {
     }
 
     /**
+     * Holds multiple return values
+     */
+    public class loadData_holder {
+        private UUID[] uuidArray;
+        private double avgWriteLatency;
+
+        loadData_holder(UUID[] uuidArray, double avgWriteLatency){
+            this.uuidArray = uuidArray;
+            this.avgWriteLatency = avgWriteLatency;
+        }
+
+        UUID[] getUuidArray() {return this.uuidArray;}
+        double getAvgWriteLatency() {return this.avgWriteLatency;}
+
+    }
+
+
+    /**
      * Inserts data into the tables.
      * Sets the Data TTL to 3600 seconds so table doesn't grow
      * arbitrarily large
      */
 
-    public UUID[] loadData() {
+    public loadData_holder loadData() {
 
         long startTime=0, endTime=0;
         double avgWriteLatency=0;
         UUID[] uuidArray = new UUID[numRecords];
+        loadData_holder loadResults;
 
         for (int i=0; i<numRecords; i++) {
 
@@ -186,10 +212,6 @@ public class LatencyChecker2 {
 
                 avgWriteLatency = avgWriteLatency + (endTime - startTime)/1000000.0;
 
-                //System.out.println("Delta Writes (msec) " + (endTime - startTime)/1000000.0);
-
-                //System.out.println(rs);
-
                 //Sleep for a random amount of time to TEST latency --- Remove Thread.sleep()
                 // line below for actual monitoring use case)
                 //Thread.sleep(com.github.javafaker.Faker.instance().number().numberBetween(10,20));
@@ -199,16 +221,38 @@ public class LatencyChecker2 {
             }
         }
 
-        System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
-        return uuidArray;
+        loadResults = new loadData_holder(uuidArray, avgWriteLatency/numRecords);
+
+        //System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
+        return loadResults;
     }
 
-    public void computeDelta(UUID[] uuidArray) {
+    public class computeDelta_holder {
+        private double avgWriteLatency;
+        private double avgReadLatency;
+        private double avgTotalLatency;
+
+        computeDelta_holder(double avgWriteLatency,double avgReadLatency,double avgTotalLatency){
+            this.avgWriteLatency = avgWriteLatency;
+            this.avgReadLatency = avgReadLatency;
+            this.avgTotalLatency = avgTotalLatency;
+        }
+
+        public void printResults (int iteration, String threadName) {
+            //Format (CSV)
+            // Iteration,ThreadId,AvgWriteLatency,AvgReadLatency,AvgTotalLatency,AvgOverhead
+
+            System.out.printf("%d,%s,%.3f,%.3f,%.3f,%3f\n", iteration, threadName, avgWriteLatency,
+                avgReadLatency, avgTotalLatency, (avgTotalLatency - avgWriteLatency - avgReadLatency));
+        }
+    }
+
+    public computeDelta_holder computeDelta(loadData_holder inputValue) {
 
         long startTime=0, endTime=0;
-        double avgReadLatency=0;
-
-        double avgTotalLatency=0;
+        double avgReadLatency=0.0;
+        double avgTotalLatency=0.0;
+        UUID[] uuidArray = inputValue.getUuidArray();
 
         for (int i=0; i<numRecords; i++) {
 
@@ -219,16 +263,17 @@ public class LatencyChecker2 {
             //For Read Latency
             endTime = getCurrentTime();
             avgReadLatency = avgReadLatency + (endTime - startTime)/1000000.0;
-            //System.out.println("Delta Reads (msec) " + (endTime - startTime)/1000000.0);
 
             //For Write + Replication + Read delays
             long currentTime = getCurrentTime();
             avgTotalLatency = avgTotalLatency + (currentTime-writeTime)/1000000.0;
-            //System.out.println("Delta Total (msec) " + (currentTime-writeTime)/1000000.0);
+
+            //System.out.printf("AvgTotalLatency:%.3f, currentTime:%d, writeTime:%d\n", avgTotalLatency, currentTime, writeTime);
         }
 
-        System.out.println("Average Read latency (msec): " + avgReadLatency/numRecords);
-        System.out.println("Average Total latency (msec): " + avgTotalLatency/numRecords);
+        return new computeDelta_holder(inputValue.getAvgWriteLatency(),
+                avgReadLatency/numRecords,
+                avgTotalLatency/numRecords);
     }
 
     private long getCreationTime(UUID uuid) {
@@ -236,12 +281,31 @@ public class LatencyChecker2 {
         long retval=0;
 
         try {
-            BoundStatement boundStatement = preparedStatement_readData.bind(uuid);
-            ResultSet results = session2.execute(boundStatement);
+            for (int i=0; i<10; i++) {
+                BoundStatement boundStatement = preparedStatement_readData.bind(uuid);
+                ResultSet results = session2.execute(boundStatement);
+
+                Iterator<Row> iter = results.iterator();
+
+                while (iter.hasNext()) {
+                    Row row = iter.next();
+                    retval = row.getLong("nanosec");
+                    //System.out.println("Nanosec = " + retval);
+                }
+                if (retval != 0){
+                    break;
+                }
+                else {
+                    System.out.println("Need to iterate again until data arrives...");
+                }
+            }
+
+            /**
             for (Row row : results) {
                 retval = row.getLong("nanosec");
-                //System.out.println("Nanosec = " + retval);
+                System.out.println("Nanosec = " + retval);
             }
+             **/
         } catch (Exception ex) {
             ex.printStackTrace();
         }

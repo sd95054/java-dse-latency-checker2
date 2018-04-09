@@ -6,17 +6,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class ExecutorsWrapper {
+
+    private static int numTasks=1;
+
     public static void main(String[] args) {
-
-        System.out.println("Starting ExecutorsWrapper..");
-
-        System.out.println("Creating Executor Service with a thread pool of Size 2");
-        ExecutorService executorService = Executors.newFixedThreadPool(2);
 
         LatencyChecker2 client = new LatencyChecker2();
 
         try {
             client.loadProperties();
+            numTasks = client.numTasks;
             client.connect();
             client.createSchema();
             client.createPreparedStatements();
@@ -25,35 +24,30 @@ public class ExecutorsWrapper {
 
         }
 
+        Runnable[] taskArray = new Runnable[numTasks];
 
-        Runnable task1 = () -> {
-            //System.out.println("Executing Task1 inside : " + Thread.currentThread().getName());
-            try {
-                TimeUnit.SECONDS.sleep(1);
-                UUID[] uuidArray = client.loadData();
-                client.computeDelta(uuidArray);
-            } catch (InterruptedException ex) {
-                throw new IllegalStateException(ex);
-            }
-        };
+        System.out.println("Creating Executor Service with a thread pool of Size:" + numTasks);
+        ExecutorService executorService = Executors.newFixedThreadPool(numTasks);
 
-        Runnable task2 = () -> {
-            //System.out.println("Executing Task2 inside : " + Thread.currentThread().getName());
-            try {
-                TimeUnit.SECONDS.sleep(2);
-                UUID[] uuidArray = client.loadData();
-                client.computeDelta(uuidArray);
-            } catch (InterruptedException ex) {
-                throw new IllegalStateException(ex);
-            }
-        };
+
+        for ( int i=0; i<numTasks; i++) {
+            int j = i;
+            taskArray[i] =  () -> {
+                System.out.println("Executing Task #" + j +  ": " + Thread.currentThread().getName());
+
+                LatencyChecker2.loadData_holder loadResults = client.loadData();
+                LatencyChecker2.computeDelta_holder cdh   = client.computeDelta(loadResults);
+                cdh.printResults(j, Thread.currentThread().getName());
+
+            };
+
+        }
 
 
         System.out.println("Submitting the tasks for execution...");
 
-        for (int i=0; i<2; i++) {
-            executorService.submit(task1);
-            executorService.submit(task2);
+        for (int i=0; i<numTasks; i++) {
+            executorService.submit(taskArray[i]);
         }
 
         executorService.shutdown();

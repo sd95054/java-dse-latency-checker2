@@ -17,6 +17,9 @@ Use Cases:\
 	- IP Addresses of hosts in DC1 and DC2\
 	- DC1 and DC2 Names\
 	- PORT\
+	- CONSISTENCY\
+	-numTasks\
+	-numRecords\
 	- Create KEYSPACE\
 	- Create TABLE\
 	- INSERT statement\
@@ -24,16 +27,14 @@ Use Cases:\
 \
 Design:\
 \
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
-\cf0 This project is about calculating Cassandra latencies between two Data Centers in the same cluster. \
+This project is about calculating Cassandra latencies between two Data Centers in the same cluster. \
 We create a keyspace (\'93latency_check\'94) and table (\'93kip\'94) (if they do not exist already).\
 We create Write requests with a Timestamp value stored as part of the INSERTs\
 We read the data we wrote immediately and report on:\
 1. Write Latency\
 2. Read Latency\
 3. Overall Latency from the time a Write was initiated to the time the same data is read back into the same client.\
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
-\cf0 \
+\
 Execution:\
 \
 \pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0

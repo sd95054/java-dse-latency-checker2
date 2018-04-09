@@ -1,2 +1,4 @@
+com/datastax/dse/demo/LatencyChecker2$loadData_holder.class
 com/datastax/dse/demo/LatencyChecker2.class
+com/datastax/dse/demo/LatencyChecker2$computeDelta_holder.class
 com/datastax/dse/demo/ExecutorsWrapper.class
