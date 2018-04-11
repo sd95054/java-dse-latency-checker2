@@ -41,6 +41,8 @@ public class LatencyChecker2 {
     private String selectStatement;
     private PreparedStatement preparedStatement_loadData;
     private PreparedStatement preparedStatement_readData;
+    private String username;
+    private String password;
 
     public void loadProperties() {
         Properties prop = new Properties();
@@ -83,6 +85,8 @@ public class LatencyChecker2 {
             createTable = prop.getProperty("createTable");
             insertStatement = prop.getProperty("insertStatement");
             selectStatement = prop.getProperty("selectStatement");
+            username = prop.getProperty("username");
+            password = prop.getProperty("password");
 
         }
         catch (IOException ex) {
@@ -109,6 +113,7 @@ public class LatencyChecker2 {
 
         cluster1 = Cluster.builder()
                 .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
+                .withCredentials(username.trim(), password.trim())
                 .withLoadBalancingPolicy(
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc1_name)
@@ -125,6 +130,7 @@ public class LatencyChecker2 {
 
         cluster2 = Cluster.builder()
                 .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
+                .withCredentials(username.trim(), password.trim())
                 .withLoadBalancingPolicy(
                         DCAwareRoundRobinPolicy.builder()
                                 .withLocalDc(dc2_name)
