@@ -192,14 +192,18 @@ public class LatencyChecker2 {
         }
 
 
-        System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
+        //System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
 
         session1 = cluster1.connect();
 
+        System.out.println("After session1 definition\n");
 
-        System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
+
+        //System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
 
         session2 = cluster2.connect();
+
+        System.out.println("After session2 definition\n");
     }
 
     public void createPreparedStatements() {
