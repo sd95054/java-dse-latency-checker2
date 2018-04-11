@@ -117,8 +117,6 @@ public class LatencyChecker2 {
 
         if (authMethod.compareTo("username_password") == 0) {
 
-            System.out.println("Before cluster1 definiton\n");
-
             //For DC #1
             cluster1 = Cluster.builder()
                     .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
@@ -129,8 +127,6 @@ public class LatencyChecker2 {
                                     .build()
                     ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
                     .build();
-
-            System.out.println("Before cluster2 definiton\n");
 
             //For DC #2
             cluster2 = Cluster.builder()
@@ -143,7 +139,6 @@ public class LatencyChecker2 {
                     ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
                     .build();
 
-            System.out.println("After cluster2 definiton\n");
         }
         else if (authMethod.compareTo("kerberos") == 0) {
 
@@ -192,18 +187,14 @@ public class LatencyChecker2 {
         }
 
 
-        //System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
+        System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
 
         session1 = cluster1.connect();
 
-        System.out.println("After session1 definition\n");
-
-
-        //System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
+        System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
 
         session2 = cluster2.connect();
 
-        System.out.println("After session2 definition\n");
     }
 
     public void createPreparedStatements() {
