@@ -1,5 +1,9 @@
 package com.datastax.dse.demo;
 
+import org.apache.log4j.BasicConfigurator;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -9,7 +13,16 @@ public class ExecutorsWrapper {
 
     private static int numTasks=1;
 
+    // Define a static logger variable so that it references the
+    // root Logger
+    static Logger logger = Logger.getRootLogger();
+
     public static void main(String[] args) {
+
+        // Set up a simple configuration that logs on the console.
+        BasicConfigurator.configure();
+
+        logger.setLevel(Level.ERROR);
 
         LatencyChecker2 client = new LatencyChecker2();
 

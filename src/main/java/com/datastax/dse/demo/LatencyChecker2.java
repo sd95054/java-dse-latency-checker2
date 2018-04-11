@@ -208,6 +208,7 @@ public class LatencyChecker2 {
 
                 ResultSet rs = session1.execute(boundStatement);
 
+
                 //Without Prepared statement
                 //String query1 = "INSERT INTO latency_check.kvp (id,nanosec) VALUES(" + uuid + ", " + startTime + ");";
                 //
