@@ -3,6 +3,7 @@ package com.datastax.dse.demo;
 import com.datastax.driver.core.*;
 import com.datastax.driver.core.policies.DCAwareRoundRobinPolicy;
 import com.datastax.driver.core.utils.UUIDs;
+import com.datastax.driver.dse.auth.DseGSSAPIAuthProvider;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -41,6 +42,7 @@ public class LatencyChecker2 {
     private String selectStatement;
     private PreparedStatement preparedStatement_loadData;
     private PreparedStatement preparedStatement_readData;
+    private String authMethod;
     private String username;
     private String password;
 
@@ -85,8 +87,11 @@ public class LatencyChecker2 {
             createTable = prop.getProperty("createTable");
             insertStatement = prop.getProperty("insertStatement");
             selectStatement = prop.getProperty("selectStatement");
-            username = prop.getProperty("username");
-            password = prop.getProperty("password");
+            authMethod = prop.getProperty("authMethod");
+            if (authMethod.compareTo("username_password") == 0) {
+                username = prop.getProperty("username");
+                password = prop.getProperty("password");
+            }
 
         }
         catch (IOException ex) {
@@ -109,34 +114,81 @@ public class LatencyChecker2 {
      */
     public void connect() {
 
-        //For DC #1
 
-        cluster1 = Cluster.builder()
-                .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
-                .withCredentials(username.trim(), password.trim())
-                .withLoadBalancingPolicy(
-                        DCAwareRoundRobinPolicy.builder()
-                                .withLocalDc(dc1_name)
-                                .build()
-                ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
-                .build();
+        if (authMethod.compareTo("username_password") == 0) {
+
+            //For DC #1
+            cluster1 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
+                    .withCredentials(username.trim(), password.trim())
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc1_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+
+            //For DC #2
+            cluster2 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
+                    .withCredentials(username.trim(), password.trim())
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc2_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+        }
+        else if (authMethod.compareTo("kerberos") == 0) {
+
+            cluster1 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
+                    .withAuthProvider(DseGSSAPIAuthProvider.builder().build())
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc1_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+
+            cluster2 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
+                    .withAuthProvider(DseGSSAPIAuthProvider.builder().build())
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc2_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+        }
+        else { // No authentication in cluster
+
+            //For DC #1
+            cluster1 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC1).withPort(PORT)
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc1_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+
+            //For DC #2
+            cluster2 = Cluster.builder()
+                    .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
+                    .withLoadBalancingPolicy(
+                            DCAwareRoundRobinPolicy.builder()
+                                    .withLocalDc(dc2_name)
+                                    .build()
+                    ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
+                    .build();
+
+        }
 
 
         System.out.printf("Connected to cluster: %s%n", cluster1.getMetadata().getClusterName());
 
         session1 = cluster1.connect();
-
-        //For DC #2 (create session2 for reading)
-
-        cluster2 = Cluster.builder()
-                .addContactPoints(CONTACT_POINTS_DC2).withPort(PORT)
-                .withCredentials(username.trim(), password.trim())
-                .withLoadBalancingPolicy(
-                        DCAwareRoundRobinPolicy.builder()
-                                .withLocalDc(dc2_name)
-                                .build()
-                ).withQueryOptions(new QueryOptions().setConsistencyLevel(CONSISTENCY))
-                .build();
 
 
         System.out.printf("Connected to cluster: %s%n", cluster2.getMetadata().getClusterName());
