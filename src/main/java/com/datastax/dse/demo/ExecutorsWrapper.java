@@ -30,25 +30,28 @@ public class ExecutorsWrapper {
         ExecutorService executorService = Executors.newFixedThreadPool(numTasks);
 
 
-        for ( int i=0; i<numTasks; i++) {
+        for (int i = 0; i < numTasks; i++) {
             int j = i;
-            taskArray[i] =  () -> {
-                System.out.println("Executing Task #" + j +  ": " + Thread.currentThread().getName());
+            taskArray[i] = () -> {
+                System.out.println("Executing Task #" + j + ": " + Thread.currentThread().getName());
 
                 LatencyChecker2.loadData_holder loadResults = client.loadData();
-                LatencyChecker2.computeDelta_holder cdh   = client.computeDelta(loadResults);
+                LatencyChecker2.computeDelta_holder cdh = client.computeDelta(loadResults);
                 cdh.printResults(j, Thread.currentThread().getName());
 
             };
 
         }
 
-
         System.out.println("Submitting the tasks for execution...");
 
-        for (int i=0; i<numTasks; i++) {
+        for (int i = 0; i < numTasks; i++) {
             executorService.submit(taskArray[i]);
         }
+
+
+
+
 
         executorService.shutdown();
 
@@ -72,4 +75,5 @@ public class ExecutorsWrapper {
 
         client.close();
     }
+
 }

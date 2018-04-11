@@ -208,6 +208,12 @@ public class LatencyChecker2 {
 
                 ResultSet rs = session1.execute(boundStatement);
 
+                //Without Prepared statement
+                //String query1 = "INSERT INTO latency_check.kvp (id,nanosec) VALUES(" + uuid + ", " + startTime + ");";
+                //
+                //session1.execute(query1);
+
+
                 endTime = getCurrentTime();
 
                 avgWriteLatency = avgWriteLatency + (endTime - startTime)/1000000.0;
