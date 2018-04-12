@@ -293,11 +293,17 @@ public class LatencyChecker2 {
                 ex.printStackTrace();
             }
         }
+/****
+        loadResults = new loadData_holder(uuidArray,
+                avgWriteLatency/numRecords,
+                trace.getCoordinator().toString(),
+                trace.getDurationMicros());
+ ***/
 
         loadResults = new loadData_holder(uuidArray,
-                            avgWriteLatency/numRecords,
-                                trace.getCoordinator().toString(),
-                                trace.getDurationMicros());
+                avgWriteLatency/numRecords,
+                "coordinator",
+                100);
 
         //System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
         return loadResults;
@@ -357,13 +363,22 @@ public class LatencyChecker2 {
             //Tracing output
             ExecutionInfo executionInfo = rdh.rs.getExecutionInfo();
             trace = executionInfo.getQueryTrace();
-        }
+            //System.out.println("Trace ID: " + trace.getTraceId());
 
+        }
+/***
         return new computeDelta_holder(inputValue,
                 avgReadLatency/numRecords,
                 avgTotalLatency/numRecords,
                  trace.getCoordinator().toString(),
                  trace.getDurationMicros());
+ ***/
+
+        return new computeDelta_holder(inputValue,
+                avgReadLatency/numRecords,
+                avgTotalLatency/numRecords,
+                "coordinator",
+                100);
     }
 
     private class readData_holder {

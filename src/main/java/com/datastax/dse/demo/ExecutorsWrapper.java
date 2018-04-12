@@ -45,13 +45,14 @@ public class ExecutorsWrapper {
 
         for (int i = 0; i < numTasks; i++) {
             int j = i;
+
             taskArray[i] = () -> {
+
                 //System.out.println("Executing Task #" + j + ": " + Thread.currentThread().getName());
 
                 LatencyChecker2.loadData_holder loadResults = client.loadData();
                 LatencyChecker2.computeDelta_holder cdh = client.computeDelta(loadResults);
                 cdh.printResults(j, Thread.currentThread().getName());
-
             };
 
         }
@@ -72,6 +73,7 @@ public class ExecutorsWrapper {
 
 
         executorService.shutdown();
+
 
         try {
             // Wait a while for existing tasks to terminate
