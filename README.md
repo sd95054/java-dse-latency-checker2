@@ -22,7 +22,7 @@ Use Cases:
 Design:
 
 This project is about calculating Cassandra latencies between two Data Centers in the same cluster. 
-We create a keyspace (“latency_check”) and table (“kip”) (if they do not exist already).
+We create a keyspace (“latency_check”) and table (“kvp”) (if they do not exist already).
 We create Write requests with a Timestamp value stored as part of the INSERTs
 We read the data we wrote immediately and report on:
 1. Write Latency
