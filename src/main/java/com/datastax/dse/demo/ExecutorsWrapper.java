@@ -42,7 +42,6 @@ public class ExecutorsWrapper {
         System.out.println("Creating Executor Service with a thread pool of Size:" + numTasks);
         ExecutorService executorService = Executors.newFixedThreadPool(numTasks);
 
-
         for (int i = 0; i < numTasks; i++) {
             int j = i;
 
@@ -58,10 +57,6 @@ public class ExecutorsWrapper {
         }
 
         System.out.println("Submitting the tasks for execution...");
-
-        for (int i = 0; i < numTasks; i++) {
-            executorService.submit(taskArray[i]);
-        }
 
         if (client.queryTracing.compareTo("ON")==0) {
             System.out.println("\nIteration(I), WriteLatency(WL), ReadLatency(RL), TotalLatency(TL)\n" +
@@ -79,6 +74,16 @@ public class ExecutorsWrapper {
 
             System.out.println("\nI \tThreadName \t    WL\t   RL \t TL  \tAL\n");
         }
+
+        for (int i = 0; i < numTasks; i++) {
+            executorService.submit(taskArray[i]);
+        }
+
+
+
+
+
+
 
 
         executorService.shutdown();
