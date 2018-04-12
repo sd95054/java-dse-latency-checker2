@@ -46,7 +46,7 @@ public class ExecutorsWrapper {
         for (int i = 0; i < numTasks; i++) {
             int j = i;
             taskArray[i] = () -> {
-                System.out.println("Executing Task #" + j + ": " + Thread.currentThread().getName());
+                //System.out.println("Executing Task #" + j + ": " + Thread.currentThread().getName());
 
                 LatencyChecker2.loadData_holder loadResults = client.loadData();
                 LatencyChecker2.computeDelta_holder cdh = client.computeDelta(loadResults);
@@ -62,8 +62,13 @@ public class ExecutorsWrapper {
             executorService.submit(taskArray[i]);
         }
 
+        System.out.println("\nIteration(I), WriteLatency(WL), ReadLatency(RL), TotalLatency(TL)\n" +
+                "Additional Latency(AL), Write Coordinator(WC), Server-side Write Latency (sWL)\n" +
+                "Read Coordinator(RC), Server-side Read Latency(sRL)\n");
 
+        System.out.println("All time is reported in milli-seconds\n");
 
+        System.out.println("\nI ThreadName \t    WL\t   RL \t TL  \tAL \tWC \t sWL \t RC \t   sRL\n");
 
 
         executorService.shutdown();

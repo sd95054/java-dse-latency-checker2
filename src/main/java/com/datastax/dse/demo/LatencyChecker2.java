@@ -227,20 +227,20 @@ public class LatencyChecker2 {
     }
 
     /**
-     * Holds multiple return values
+     * LDH (Load/Write Data holder) multiple return values
      */
     public class loadData_holder {
-        private UUID[] uuidArray;
-        private double avgWriteLatency;
+        UUID[] uuidArray;
+        double avgWriteLatency;
+        String traceCoordinator;
+        double traceDuration;
 
-        loadData_holder(UUID[] uuidArray, double avgWriteLatency){
+        loadData_holder(UUID[] uuidArray, double avgWriteLatency, String trCood, double trDur){
             this.uuidArray = uuidArray;
             this.avgWriteLatency = avgWriteLatency;
+            this.traceCoordinator = trCood;
+            this.traceDuration = trDur;
         }
-
-        UUID[] getUuidArray() {return this.uuidArray;}
-        double getAvgWriteLatency() {return this.avgWriteLatency;}
-
     }
 
 
@@ -256,6 +256,7 @@ public class LatencyChecker2 {
         double avgWriteLatency=0;
         UUID[] uuidArray = new UUID[numRecords];
         loadData_holder loadResults;
+        QueryTrace trace = null;
 
         for (int i=0; i<numRecords; i++) {
 
@@ -282,12 +283,9 @@ public class LatencyChecker2 {
 
                 //Tracing output
                 ExecutionInfo executionInfo = rs.getExecutionInfo();
-                QueryTrace trace = executionInfo.getQueryTrace();
-                System.out.printf(
-                        "Load Data: '%s' to %s took %dμs%n",
-                        trace.getRequestType(), trace.getCoordinator(), trace.getDurationMicros());
+                trace = executionInfo.getQueryTrace();
 
-                //Sleep for a random amount of time to TEST latency --- Remove Thread.sleep()
+               //Sleep for a random amount of time to TEST latency --- Remove Thread.sleep()
                 // line below for actual monitoring use case)
                 //Thread.sleep(com.github.javafaker.Faker.instance().number().numberBetween(10,20));
 
@@ -296,29 +294,39 @@ public class LatencyChecker2 {
             }
         }
 
-        loadResults = new loadData_holder(uuidArray, avgWriteLatency/numRecords);
+        loadResults = new loadData_holder(uuidArray,
+                            avgWriteLatency/numRecords,
+                                trace.getCoordinator().toString(),
+                                trace.getDurationMicros());
 
         //System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
         return loadResults;
     }
 
+    //CDH (computeData_holder) holds LDH (Load/Write Data Holder) as well as Read information.
     public class computeDelta_holder {
-        private double avgWriteLatency;
+        private loadData_holder ldh;
         private double avgReadLatency;
         private double avgTotalLatency;
+        private String traceCoordinator;
+        private double traceDuration;
 
-        computeDelta_holder(double avgWriteLatency,double avgReadLatency,double avgTotalLatency){
-            this.avgWriteLatency = avgWriteLatency;
+        computeDelta_holder(loadData_holder ldh,double avgReadLatency,double avgTotalLatency, String trCood, double trDur){
+            this.ldh = ldh;
             this.avgReadLatency = avgReadLatency;
             this.avgTotalLatency = avgTotalLatency;
+            this.traceCoordinator = trCood;
+            this.traceDuration = trDur;
         }
 
         public void printResults (int iteration, String threadName) {
             //Format (CSV)
             // Iteration,ThreadId,AvgWriteLatency,AvgReadLatency,AvgTotalLatency,AvgOverhead
+            // ... WriteCoordinator, Write duration, Read Coordinator, Read Duration
 
-            System.out.printf("%d,%s,%.3f,%.3f,%.3f,%3f\n", iteration, threadName, avgWriteLatency,
-                avgReadLatency, avgTotalLatency, (avgTotalLatency - avgWriteLatency - avgReadLatency));
+            System.out.printf("%d, %s, %.2f, %.2f, %.2f, %.2f, %s, %.2f, %s, %.2f\n", iteration, threadName, ldh.avgWriteLatency,
+                avgReadLatency, avgTotalLatency, (avgTotalLatency - ldh.avgWriteLatency - avgReadLatency),
+                    ldh.traceCoordinator, ldh.traceDuration/1000., traceCoordinator, traceDuration/1000.);
         }
     }
 
@@ -327,7 +335,8 @@ public class LatencyChecker2 {
         long startTime=0, endTime=0;
         double avgReadLatency=0.0;
         double avgTotalLatency=0.0;
-        UUID[] uuidArray = inputValue.getUuidArray();
+        UUID[] uuidArray = inputValue.uuidArray;
+        QueryTrace trace = null;
 
         for (int i=0; i<numRecords; i++) {
 
@@ -347,15 +356,14 @@ public class LatencyChecker2 {
 
             //Tracing output
             ExecutionInfo executionInfo = rdh.rs.getExecutionInfo();
-            QueryTrace trace = executionInfo.getQueryTrace();
-            System.out.printf(
-                    "Read Data: '%s' to %s took %dμs%n",
-                    trace.getRequestType(), trace.getCoordinator(), trace.getDurationMicros());
+            trace = executionInfo.getQueryTrace();
         }
 
-        return new computeDelta_holder(inputValue.getAvgWriteLatency(),
+        return new computeDelta_holder(inputValue,
                 avgReadLatency/numRecords,
-                avgTotalLatency/numRecords);
+                avgTotalLatency/numRecords,
+                 trace.getCoordinator().toString(),
+                 trace.getDurationMicros());
     }
 
     private class readData_holder {
