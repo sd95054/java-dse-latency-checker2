@@ -45,6 +45,7 @@ public class LatencyChecker2 {
     private String authMethod;
     private String username;
     private String password;
+    public String queryTracing;
 
     public void loadProperties() {
         Properties prop = new Properties();
@@ -92,6 +93,7 @@ public class LatencyChecker2 {
                 username = prop.getProperty("username");
                 password = prop.getProperty("password");
             }
+            queryTracing = prop.getProperty("queryTracing");
 
         }
         catch (IOException ex) {
@@ -228,18 +230,22 @@ public class LatencyChecker2 {
 
     /**
      * LDH (Load/Write Data holder) multiple return values
+     * Depending on flag "queryTracing" we set traceId
      */
     public class loadData_holder {
         UUID[] uuidArray;
         double avgWriteLatency;
-        String traceCoordinator;
-        double traceDuration;
+        UUID traceId;
 
-        loadData_holder(UUID[] uuidArray, double avgWriteLatency, String trCood, double trDur){
+        loadData_holder(UUID[] uuidArray, double avgWriteLatency, UUID traceId){
             this.uuidArray = uuidArray;
             this.avgWriteLatency = avgWriteLatency;
-            this.traceCoordinator = trCood;
-            this.traceDuration = trDur;
+            this.traceId = traceId;
+        }
+
+        loadData_holder(UUID[] uuidArray, double avgWriteLatency){
+            this.uuidArray = uuidArray;
+            this.avgWriteLatency = avgWriteLatency;
         }
     }
 
@@ -282,8 +288,10 @@ public class LatencyChecker2 {
                 avgWriteLatency = avgWriteLatency + (endTime - startTime)/1000000.0;
 
                 //Tracing output
-                ExecutionInfo executionInfo = rs.getExecutionInfo();
-                trace = executionInfo.getQueryTrace();
+                if (queryTracing.compareTo("ON")==0) {
+                    ExecutionInfo executionInfo = rs.getExecutionInfo();
+                    trace = executionInfo.getQueryTrace();
+                }
 
                //Sleep for a random amount of time to TEST latency --- Remove Thread.sleep()
                 // line below for actual monitoring use case)
@@ -293,46 +301,57 @@ public class LatencyChecker2 {
                 ex.printStackTrace();
             }
         }
-/****
-        loadResults = new loadData_holder(uuidArray,
-                avgWriteLatency/numRecords,
-                trace.getCoordinator().toString(),
-                trace.getDurationMicros());
- ***/
 
-        loadResults = new loadData_holder(uuidArray,
-                avgWriteLatency/numRecords,
-                "coordinator",
-                100);
+        if (queryTracing.compareTo("ON")==0) {
+            loadResults = new loadData_holder(uuidArray,
+                    avgWriteLatency / numRecords,
+                    trace.getTraceId());
+        }
+        else {
+            loadResults = new loadData_holder(uuidArray,
+                    avgWriteLatency / numRecords);
+        }
 
         //System.out.println("Average Write latency (msec): " + avgWriteLatency/numRecords);
         return loadResults;
     }
 
-    //CDH (computeData_holder) holds LDH (Load/Write Data Holder) as well as Read information.
+    /**
+     * CDH (computeData_holder) holds LDH (Load/Write Data Holder) as well as Read information.
+     * Depending on flag "queryTracing" we set traceId
+    **/
     public class computeDelta_holder {
         private loadData_holder ldh;
         private double avgReadLatency;
         private double avgTotalLatency;
-        private String traceCoordinator;
-        private double traceDuration;
+        private UUID traceId;
 
-        computeDelta_holder(loadData_holder ldh,double avgReadLatency,double avgTotalLatency, String trCood, double trDur){
+        computeDelta_holder(loadData_holder ldh,double avgReadLatency,double avgTotalLatency, UUID traceId){
             this.ldh = ldh;
             this.avgReadLatency = avgReadLatency;
             this.avgTotalLatency = avgTotalLatency;
-            this.traceCoordinator = trCood;
-            this.traceDuration = trDur;
+            this.traceId = traceId;
+        }
+        computeDelta_holder(loadData_holder ldh,double avgReadLatency,double avgTotalLatency){
+            this.ldh = ldh;
+            this.avgReadLatency = avgReadLatency;
+            this.avgTotalLatency = avgTotalLatency;
         }
 
         public void printResults (int iteration, String threadName) {
             //Format (CSV)
             // Iteration,ThreadId,AvgWriteLatency,AvgReadLatency,AvgTotalLatency,AvgOverhead
-            // ... WriteCoordinator, Write duration, Read Coordinator, Read Duration
+            // ... Query Tracing ID (if enabled by flag)
 
-            System.out.printf("%d, %s, %.2f, %.2f, %.2f, %.2f, %s, %.2f, %s, %.2f\n", iteration, threadName, ldh.avgWriteLatency,
-                avgReadLatency, avgTotalLatency, (avgTotalLatency - ldh.avgWriteLatency - avgReadLatency),
-                    ldh.traceCoordinator, ldh.traceDuration/1000., traceCoordinator, traceDuration/1000.);
+            if (queryTracing.compareTo("ON")==0) {
+                System.out.printf("%d, %s, %.2f, %.2f, %.2f, %.2f, %s, %s\n", iteration, threadName, ldh.avgWriteLatency,
+                        avgReadLatency, avgTotalLatency, (avgTotalLatency - ldh.avgWriteLatency - avgReadLatency),
+                        ldh.traceId, traceId);
+            }
+            else {
+                System.out.printf("%d, %s, %.2f, %.2f, %.2f, %.2f\n", iteration, threadName, ldh.avgWriteLatency,
+                        avgReadLatency, avgTotalLatency, (avgTotalLatency - ldh.avgWriteLatency - avgReadLatency));
+            }
         }
     }
 
@@ -343,6 +362,7 @@ public class LatencyChecker2 {
         double avgTotalLatency=0.0;
         UUID[] uuidArray = inputValue.uuidArray;
         QueryTrace trace = null;
+        computeDelta_holder cdh;
 
         for (int i=0; i<numRecords; i++) {
 
@@ -361,24 +381,26 @@ public class LatencyChecker2 {
             //System.out.printf("AvgTotalLatency:%.3f, currentTime:%d, writeTime:%d\n", avgTotalLatency, currentTime, writeTime);
 
             //Tracing output
-            ExecutionInfo executionInfo = rdh.rs.getExecutionInfo();
-            trace = executionInfo.getQueryTrace();
-            //System.out.println("Trace ID: " + trace.getTraceId());
+            if (queryTracing.compareTo("ON")==0) {
+                ExecutionInfo executionInfo = rdh.rs.getExecutionInfo();
+                trace = executionInfo.getQueryTrace();
+            }
 
         }
-/***
-        return new computeDelta_holder(inputValue,
-                avgReadLatency/numRecords,
-                avgTotalLatency/numRecords,
-                 trace.getCoordinator().toString(),
-                 trace.getDurationMicros());
- ***/
 
-        return new computeDelta_holder(inputValue,
-                avgReadLatency/numRecords,
-                avgTotalLatency/numRecords,
-                "coordinator",
-                100);
+        if (queryTracing.compareTo("ON")==0) {
+            cdh = new computeDelta_holder(inputValue,
+                    avgReadLatency / numRecords,
+                    avgTotalLatency / numRecords,
+                    trace.getTraceId());
+        }
+        else {
+            cdh = new computeDelta_holder(inputValue,
+                    avgReadLatency / numRecords,
+                    avgTotalLatency / numRecords);
+        }
+
+        return cdh;
     }
 
     private class readData_holder {

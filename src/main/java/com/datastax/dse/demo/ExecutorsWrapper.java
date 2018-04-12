@@ -63,13 +63,22 @@ public class ExecutorsWrapper {
             executorService.submit(taskArray[i]);
         }
 
-        System.out.println("\nIteration(I), WriteLatency(WL), ReadLatency(RL), TotalLatency(TL)\n" +
-                "Additional Latency(AL), Write Coordinator(WC), Server-side Write Latency (sWL)\n" +
-                "Read Coordinator(RC), Server-side Read Latency(sRL)\n");
+        if (client.queryTracing.compareTo("ON")==0) {
+            System.out.println("\nIteration(I), WriteLatency(WL), ReadLatency(RL), TotalLatency(TL)\n" +
+                    "Additional Latency(AL), Trace_Id_Write(tId_w), Trace_Id_Read(tId_r)\n");
 
-        System.out.println("All time is reported in milli-seconds\n");
+            System.out.println("All time is reported in milli-seconds\n");
 
-        System.out.println("\nI ThreadName \t    WL\t   RL \t TL  \tAL \tWC \t sWL \t RC \t   sRL\n");
+            System.out.println("\nI \tThreadName \t    WL\t   RL \t TL  \tAL \t\t tId_w \t\t\t\t tId_r\n");
+        }
+        else {
+            System.out.println("\nIteration(I), WriteLatency(WL), ReadLatency(RL), TotalLatency(TL)\n" +
+                    "Additional Latency(AL)\n");
+
+            System.out.println("All time is reported in milli-seconds\n");
+
+            System.out.println("\nI \tThreadName \t    WL\t   RL \t TL  \tAL\n");
+        }
 
 
         executorService.shutdown();
