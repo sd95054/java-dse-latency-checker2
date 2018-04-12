@@ -200,6 +200,8 @@ public class LatencyChecker2 {
     public void createPreparedStatements() {
         preparedStatement_loadData = session1.prepare(insertStatement);
         preparedStatement_readData = session2.prepare(selectStatement);
+        preparedStatement_loadData.enableTracing();
+        preparedStatement_readData.enableTracing();
     }
 
     /**
@@ -278,6 +280,13 @@ public class LatencyChecker2 {
 
                 avgWriteLatency = avgWriteLatency + (endTime - startTime)/1000000.0;
 
+                //Tracing output
+                ExecutionInfo executionInfo = rs.getExecutionInfo();
+                QueryTrace trace = executionInfo.getQueryTrace();
+                System.out.printf(
+                        "Load Data: '%s' to %s took %dμs%n",
+                        trace.getRequestType(), trace.getCoordinator(), trace.getDurationMicros());
+
                 //Sleep for a random amount of time to TEST latency --- Remove Thread.sleep()
                 // line below for actual monitoring use case)
                 //Thread.sleep(com.github.javafaker.Faker.instance().number().numberBetween(10,20));
@@ -324,7 +333,7 @@ public class LatencyChecker2 {
 
             startTime = getCurrentTime();
 
-            long writeTime = getCreationTime(uuidArray[i]);
+            readData_holder rdh = getCreationTime(uuidArray[i]);
 
             //For Read Latency
             endTime = getCurrentTime();
@@ -332,9 +341,16 @@ public class LatencyChecker2 {
 
             //For Write + Replication + Read delays
             long currentTime = getCurrentTime();
-            avgTotalLatency = avgTotalLatency + (currentTime-writeTime)/1000000.0;
+            avgTotalLatency = avgTotalLatency + (currentTime-rdh.writetime)/1000000.0;
 
             //System.out.printf("AvgTotalLatency:%.3f, currentTime:%d, writeTime:%d\n", avgTotalLatency, currentTime, writeTime);
+
+            //Tracing output
+            ExecutionInfo executionInfo = rdh.rs.getExecutionInfo();
+            QueryTrace trace = executionInfo.getQueryTrace();
+            System.out.printf(
+                    "Read Data: '%s' to %s took %dμs%n",
+                    trace.getRequestType(), trace.getCoordinator(), trace.getDurationMicros());
         }
 
         return new computeDelta_holder(inputValue.getAvgWriteLatency(),
@@ -342,23 +358,34 @@ public class LatencyChecker2 {
                 avgTotalLatency/numRecords);
     }
 
-    private long getCreationTime(UUID uuid) {
+    private class readData_holder {
+        long writetime;
+        ResultSet rs;
 
-        long retval=0;
+        readData_holder(long writeTime, ResultSet rs){
+            this.writetime = writeTime;
+            this.rs = rs;
+        }
+    }
+
+    private readData_holder getCreationTime(UUID uuid) {
+
+        long time=0;
+        ResultSet rs=null;
 
         try {
             for (int i=0; i<10; i++) {
                 BoundStatement boundStatement = preparedStatement_readData.bind(uuid);
-                ResultSet results = session2.execute(boundStatement);
+                rs= session2.execute(boundStatement);
 
-                Iterator<Row> iter = results.iterator();
+                Iterator<Row> iter = rs.iterator();
 
                 while (iter.hasNext()) {
                     Row row = iter.next();
-                    retval = row.getLong("nanosec");
+                    time = row.getLong("nanosec");
                     //System.out.println("Nanosec = " + retval);
                 }
-                if (retval != 0){
+                if (time != 0){
                     break;
                 }
                 else {
@@ -366,17 +393,11 @@ public class LatencyChecker2 {
                 }
             }
 
-            /**
-            for (Row row : results) {
-                retval = row.getLong("nanosec");
-                System.out.println("Nanosec = " + retval);
-            }
-             **/
         } catch (Exception ex) {
             ex.printStackTrace();
         }
 
-        return retval;
+        return new readData_holder(time, rs);
     }
 
     /**
